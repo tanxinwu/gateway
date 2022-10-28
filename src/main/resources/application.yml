@@ -1,0 +1,102 @@
+server:
+  port: 443
+  name: gateway
+  ssl:
+    enabled: true
+    key-alias: gateway
+    key-store-password: 123456
+    key-store: classpath:scg-keystore.p12
+    key-store-type: PKCS12
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "https://docs.spring.io"
+            allowedMethods:
+              - GET
+        add-to-simple-url-handler-mapping: true
+      httpclient:
+        ssl:
+           useInsecureTrustManager: true
+        connect-timeout: 1000
+        response-timeout: 5s
+      routes:
+        - id: public_order
+#          需要跳转的地址
+          uri: http://localhost:8081
+          predicates:
+            - Path=/public/order/**
+          metadata:
+            response-timeout: 200
+            connect-timeout: 200
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+            - name: CircuitBreaker
+              args:
+                name: fetchIngredients
+                fallbackUri: direct:/fallback/err
+        - id: ingredients-fallback
+          uri: http://localhost:9994
+          predicates:
+              - Path=/fallback/err
+          filters:
+              - name: FallbackHeaders
+                args:
+                  executionExceptionTypeHeaderName: Test-Header
+        - id: private_order
+          uri: http://localhost:8081
+          predicates:
+            - Path=/private/order/**
+          metadata:
+            response-timeout: 200
+            connect-timeout: 200
+          filters:
+              - name: RequestRateLimiter
+                args:
+                  redis-rate-limiter.replenishRate: 10
+                  redis-rate-limiter.burstCapacity: 20
+                  redis-rate-limiter.requestedTokens: 1
+        - id: private_order
+          uri: http://localhost:8082
+          predicates:
+            - Path=/public/ware/**
+          metadata:
+            response-timeout: 200
+            connect-timeout: 200
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+        - id: private_order
+          uri: http://localhost:8082
+          predicates:
+            - Path=/private/ware/**
+          metadata:
+            response-timeout: 200
+            connect-timeout: 200
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+  redis:
+    host: 127.0.0.1
+logging:
+  config: classpath:logback.xml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: gateway
+  endpoint:
+    gateway:
+      enabled: true
